@@ -5,7 +5,6 @@ import re
 
 class Handler:
     """Handles the UI and logic for the Small Scale Recap Template (Steps 3, 4, 5)"""
-
     def render_step_3(self, mgr, config):
         st.header("Step 3: Configuration & Inputs")
         
@@ -51,25 +50,26 @@ class Handler:
                 "sql_article_tuple": "()" # Default empty tuple
             })
             
-            # 1. Handle Article Append & SQL List Extraction
+            # 1. Handle Article Append & F1 Copy-Paste
             if uploaded_file:
-                # Read the file
+                # Use header=None so Row 1 isn't treated as headers
                 if uploaded_file.name.endswith('csv'):
-                    df = pd.read_csv(uploaded_file)
+                    df = pd.read_csv(uploaded_file, header=None)
                 else:
-                    df = pd.read_excel(uploaded_file)
+                    df = pd.read_excel(uploaded_file, header=None)
                 
-                # Extract the articles from the first column (Column A)
-                articles = df.iloc[:, 0].dropna().astype(str).tolist()
-                
-                # Format into SQL Tuple: ('123', '456', '789')
-                if articles:
-                    st.session_state.sql_article_tuple = "(" + ", ".join([f"'{art}'" for art in articles]) + ")"
+                # Extract exact data from Cell F1 (Row 0, Col 5 in pandas logic)
+                # Check if the file actually has 6 columns to prevent crashing
+                if df.shape[1] >= 6:
+                    f1_raw = df.iloc[0, 5]
+                    if pd.notna(f1_raw):
+                        st.session_state.sql_article_tuple = str(f1_raw)
 
-                # A) Append the raw data (first 4 columns: A-D) to the Excel tab
+                # A) Copy Col A:D exactly as-is and paste to item_list tab
+                # df.iloc[:, :4] means "all rows, first 4 columns"
                 mgr.append_dataframe(config['sheets']['item_list'], df.iloc[:, :4])
                 
-                # B) Write the formatted tuple string directly into cell F1 of the item_list tab
+                # B) Write the exact copied F1 string into Cell F1 of the template
                 mgr.write_to_cell(config['sheets']['item_list'], 'F1', st.session_state.sql_article_tuple)
 
             # 2. Create Tab using the DYNAMICALLY selected base sheet
@@ -77,7 +77,7 @@ class Handler:
             st.session_state.current_tab = tab_name
             mgr.create_promo_tab(st.session_state.base_sheet, tab_name)
             
-            # 3. Write data to the newly created tab using the mm/dd/yyyy formatted dates
+            # 3. Write data to the newly created tab
             mappings = config['mappings']
             mgr.write_to_cell(tab_name, mappings['ty_qualify_dates'], f"{st.session_state.ty_q_start} - {st.session_state.ty_q_end}")
             mgr.write_to_cell(tab_name, mappings['ty_redeem_dates'], f"{st.session_state.ty_r_start} - {st.session_state.ty_r_end}")
