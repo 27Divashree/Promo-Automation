@@ -15,17 +15,24 @@ def load_configs():
             configs[data['display_name']] = data
     return configs
 
+# Start at Step 1 to keep numbers clean
 if 'step' not in st.session_state:
-    st.session_state.step = 0
+    st.session_state.step = 1
 if 'configs' not in st.session_state:
     st.session_state.configs = load_configs()
 
-st.title("Promotion Analysis Generator")
+# ==========================================
+# Dynamic App Header
+# ==========================================
+if st.session_state.step > 1 and st.session_state.get('promo_name'):
+    st.title(f"📊 {st.session_state.promo_name} - Promotion Analysis Generator")
+else:
+    st.title("📊 Promotion Analysis Generator")
 
 # ==========================================
-# APP LEVEL: Setup & Config Selection
+# Step 1: Setup & Config Selection
 # ==========================================
-if st.session_state.step == 0:
+if st.session_state.step == 1:
     st.header("Step 1: Setup")
     
     if not st.session_state.configs:
@@ -41,14 +48,13 @@ if st.session_state.step == 0:
             config = st.session_state.configs[st.session_state.template_choice]
             handler_name = config.get("handler_module")
             
-            # LOOK IN THE 'templates/' FOLDER
             excel_path = os.path.join("templates", config['template_file'])
             
             try:
                 module = importlib.import_module(f"handlers.{handler_name}")
                 st.session_state.template_handler = module.Handler() 
                 st.session_state.excel_mgr = ExcelManager(excel_path)
-                st.session_state.step = 1
+                st.session_state.step = 2 # Go to Step 2
                 st.rerun()
             except ModuleNotFoundError:
                 st.error(f"Could not find handler file: 'handlers/{handler_name}.py'")
@@ -58,10 +64,10 @@ if st.session_state.step == 0:
             st.error("Please provide a promotion name.")
 
 # ==========================================
-# APP LEVEL: Base Sheet Selection
+# Step 2: Base Sheet & Tab Naming
 # ==========================================
-elif st.session_state.step == 1:
-    st.header("Step 2: Base Sheet")
+elif st.session_state.step == 2:
+    st.header("Step 2: Base Sheet & Tab Naming")
     mgr = st.session_state.excel_mgr
     config = st.session_state.configs[st.session_state.template_choice]
     
@@ -71,32 +77,42 @@ elif st.session_state.step == 1:
     
     st.session_state.base_sheet = st.selectbox("Choose Base Sheet", sheets, index=default_idx)
     
+    # --- Tab Naming ---
+    st.divider()
+    st.subheader("Name Your New Tab")
+    
+    prefix = f"{st.session_state.promo_name}_small_scale_"
+    st.caption(f"**Prefix:** `{prefix}`")
+    user_suffix = st.text_input("Enter the rest of the tab name:", value="Qual")
+    
     if st.button("Proceed to Inputs"):
-        st.session_state.step = 1.5
+        # Save the finalized tab name BEFORE going to Step 3
+        st.session_state.current_tab = f"{prefix}{user_suffix}"
+        st.session_state.step = 3 # Go to Step 3
         st.rerun()
 
 # ==========================================
-# HANDLER LEVEL: Delegated to handlers/*.py
+# Steps 3, 4, 5: Delegated to handlers
 # ==========================================
-elif st.session_state.step == 1.5:
+elif st.session_state.step == 3:
     st.session_state.template_handler.render_step_3(st.session_state.excel_mgr, st.session_state.configs[st.session_state.template_choice])
 
-elif st.session_state.step == 2:
+elif st.session_state.step == 4:
     st.session_state.template_handler.render_step_4(st.session_state.excel_mgr, st.session_state.configs[st.session_state.template_choice])
 
-elif st.session_state.step == 3:
+elif st.session_state.step == 5:
     st.session_state.template_handler.render_step_5(st.session_state.excel_mgr, st.session_state.configs[st.session_state.template_choice])
 
 # ==========================================
-# APP LEVEL: Actions & Download
+# Step 6: Actions & Download
 # ==========================================
-elif st.session_state.step == 4:
-    st.success(f"Sheet '{st.session_state.current_tab}' completed successfully!")
+elif st.session_state.step == 6:
+    st.success(f"Sheet '{st.session_state.get('current_tab', 'Analysis')}' completed successfully!")
     
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Add More Tabs (Another Base Sheet)"):
-            st.session_state.step = 1
+            st.session_state.step = 2 # Loop back to Step 2
             st.rerun()
             
     with col2:
@@ -105,13 +121,13 @@ elif st.session_state.step == 4:
         
         st.download_button("Generate & Download Workbook", data=output_bytes, file_name=file_name,
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           on_click=lambda: st.session_state.update(step=5))
+                           on_click=lambda: st.session_state.update(step=7)) # Go to Step 7 on click
 
 # ==========================================
-# APP LEVEL: Reset
+# Step 7: Reset
 # ==========================================
-elif st.session_state.step == 5:
-    st.success("Workbook generated successfully!")
+elif st.session_state.step == 7:
+    st.success("Workbook downloaded successfully!")
     st.balloons()
     
     if st.button("Start New Promotion completely"):

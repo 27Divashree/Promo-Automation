@@ -38,14 +38,6 @@ class Handler:
         q4_val = st.number_input("Redemption Amount (Q4)", value=0.0)
         
         st.divider()
-        # --- Tab Naming Option ---
-        st.subheader("3.4 Tab Naming")
-        promo_name = st.session_state.get('promo_name', 'Promo')
-        prefix = f"{promo_name}_small_scale_"
-        
-        st.caption(f"**Prefix:** `{prefix}`")
-        user_suffix = st.text_input("Enter the rest of the tab name:", value="Qual")
-        final_tab_name = f"{prefix}{user_suffix}"
         
         if st.button("Generate SQL & Create Tab", type="primary"):
             
@@ -62,8 +54,7 @@ class Handler:
                 "ly_r_end": ly_r_end.strftime(fmt),
                 "p4_val": p4_val,
                 "q4_val": q4_val,
-                "sql_article_tuple": "()", # Default
-                "current_tab": final_tab_name # Save the custom tab name
+                "sql_article_tuple": "()" # Default fallback
             })
             
             # 1. Handle Article List - Pure Copy-Paste & F1 Extraction
@@ -83,7 +74,7 @@ class Handler:
                 # Overwrite ONLY the item_list tab with the exact uploaded file
                 mgr.overwrite_item_list(config['sheets']['item_list'], df)
 
-            # 2. Create Tab using the CUSTOM name
+            # 2. Create Tab using the name defined in Step 2
             base_sheet = st.session_state.get('base_sheet', config['sheets'].get('recap_base', 'Base'))
             mgr.create_promo_tab(base_sheet, st.session_state.current_tab)
             
@@ -157,8 +148,8 @@ class Handler:
                 )
                 
                 st.success(f"Analysis complete for {st.session_state.current_tab}!")
-                # Reset to step 2 (or your main menu) to start the next tab
-                st.session_state.step = 2 
+                # Go to Step 6 (Download / Add More Tabs)
+                st.session_state.step = 6 
                 st.rerun()
             else:
                 st.warning("Please paste the SQL output first.")
