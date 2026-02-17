@@ -49,15 +49,19 @@ class ExcelManager:
         output.seek(0)
         return output
     
-    def read_column(self, sheet_name, col_letter):
-        """Reads an entire column and joins the text (useful for multi-line SQL)"""
-        sheet = self.wb[sheet_name]
-        data = []
-        # Loop through every row in the column up to the max row
-        for row in range(1, sheet.max_row + 1):
-            val = sheet[f"{col_letter}{row}"].value
-            # Append the value, or a blank string if the cell is empty (preserves spacing)
-            data.append(str(val) if val is not None else "")
+    def overwrite_item_list(self, sheet_name, df):
+        import pandas as pd
+        from openpyxl.utils.dataframe import dataframe_to_rows
         
-        # Join it all together with line breaks
-        return "\n".join(data)
+        # This guarantees we only touch the specific sheet (item-List)
+        sheet = self.wb[sheet_name]
+        
+        # 1. Wipe ONLY this specific sheet clean
+        sheet.delete_rows(1, sheet.max_row)
+        
+        # 2. Paste the uploaded data exactly as-is, starting at A1
+        for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=False), 1):
+            for c_idx, value in enumerate(row, 1):
+                # Skip blank cells so we don't paste "NaN"
+                if pd.notna(value):
+                    sheet.cell(row=r_idx, column=c_idx, value=value)

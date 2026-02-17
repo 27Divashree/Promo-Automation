@@ -5,7 +5,12 @@ import re
 
 class Handler:
     """Handles the UI and logic for the Small Scale Recap Template (Steps 3, 4, 5)"""
+
     def render_step_3(self, mgr, config):
+        # --- Persistent Header ---
+        if 'current_tab' in st.session_state:
+            st.success(f"📁 **Currently Working On:** `{st.session_state.current_tab}`")
+
         st.header("Step 3: Configuration & Inputs")
         
         st.divider()
@@ -32,9 +37,19 @@ class Handler:
         p4_val = st.number_input("Qualification Amount (P4)", value=0.0)
         q4_val = st.number_input("Redemption Amount (Q4)", value=0.0)
         
+        st.divider()
+        # --- Tab Naming Option ---
+        st.subheader("3.4 Tab Naming")
+        promo_name = st.session_state.get('promo_name', 'Promo')
+        prefix = f"{promo_name}_small_scale_"
+        
+        st.caption(f"**Prefix:** `{prefix}`")
+        user_suffix = st.text_input("Enter the rest of the tab name:", value="Qual")
+        final_tab_name = f"{prefix}{user_suffix}"
+        
         if st.button("Generate SQL & Create Tab", type="primary"):
             
-            # Format dates to mm/dd/yyyy strictly for both SQL and Excel
+            # Format dates to mm/dd/yyyy
             fmt = '%m/%d/%Y'
             st.session_state.update({
                 "ty_q_start": ty_q_start.strftime(fmt), 
@@ -47,49 +62,49 @@ class Handler:
                 "ly_r_end": ly_r_end.strftime(fmt),
                 "p4_val": p4_val,
                 "q4_val": q4_val,
-                "sql_article_tuple": "()" # Default empty tuple
+                "sql_article_tuple": "()", # Default
+                "current_tab": final_tab_name # Save the custom tab name
             })
             
-            # 1. Handle Article Append & F1 Copy-Paste
+            # 1. Handle Article List - Pure Copy-Paste & F1 Extraction
             if uploaded_file:
-                # Use header=None so Row 1 isn't treated as headers
+                # Read without headers so Row 1 stays intact
                 if uploaded_file.name.endswith('csv'):
                     df = pd.read_csv(uploaded_file, header=None)
                 else:
                     df = pd.read_excel(uploaded_file, header=None)
                 
-                # Extract exact data from Cell F1 (Row 0, Col 5 in pandas logic)
-                # Check if the file actually has 6 columns to prevent crashing
+                # Extract F1 (Row 0, Column 5)
                 if df.shape[1] >= 6:
                     f1_raw = df.iloc[0, 5]
                     if pd.notna(f1_raw):
                         st.session_state.sql_article_tuple = str(f1_raw)
 
-                # A) Copy Col A:D exactly as-is and paste to item_list tab
-                # df.iloc[:, :4] means "all rows, first 4 columns"
-                mgr.append_dataframe(config['sheets']['item_list'], df.iloc[:, :4])
-                
-                # B) Write the exact copied F1 string into Cell F1 of the template
-                mgr.write_to_cell(config['sheets']['item_list'], 'F1', st.session_state.sql_article_tuple)
+                # Overwrite ONLY the item_list tab with the exact uploaded file
+                mgr.overwrite_item_list(config['sheets']['item_list'], df)
 
-            # 2. Create Tab using the DYNAMICALLY selected base sheet
-            tab_name = f"{st.session_state.promo_name} Qual"
-            st.session_state.current_tab = tab_name
-            mgr.create_promo_tab(st.session_state.base_sheet, tab_name)
+            # 2. Create Tab using the CUSTOM name
+            base_sheet = st.session_state.get('base_sheet', config['sheets'].get('recap_base', 'Base'))
+            mgr.create_promo_tab(base_sheet, st.session_state.current_tab)
             
             # 3. Write data to the newly created tab
             mappings = config['mappings']
-            mgr.write_to_cell(tab_name, mappings['ty_qualify_dates'], f"{st.session_state.ty_q_start} - {st.session_state.ty_q_end}")
-            mgr.write_to_cell(tab_name, mappings['ty_redeem_dates'], f"{st.session_state.ty_r_start} - {st.session_state.ty_r_end}")
-            mgr.write_to_cell(tab_name, mappings['ly_qualify_dates'], f"{st.session_state.ly_q_start} - {st.session_state.ly_q_end}")
-            mgr.write_to_cell(tab_name, mappings['ly_redeem_dates'], f"{st.session_state.ly_r_start} - {st.session_state.ly_r_end}")
-            mgr.write_to_cell(tab_name, mappings['p4_qualify_amt'], p4_val)
-            mgr.write_to_cell(tab_name, mappings['q4_redeem_amt'], q4_val)
+            mgr.write_to_cell(st.session_state.current_tab, mappings['ty_qualify_dates'], f"{st.session_state.ty_q_start} - {st.session_state.ty_q_end}")
+            mgr.write_to_cell(st.session_state.current_tab, mappings['ty_redeem_dates'], f"{st.session_state.ty_r_start} - {st.session_state.ty_r_end}")
+            mgr.write_to_cell(st.session_state.current_tab, mappings['ly_qualify_dates'], f"{st.session_state.ly_q_start} - {st.session_state.ly_q_end}")
+            mgr.write_to_cell(st.session_state.current_tab, mappings['ly_redeem_dates'], f"{st.session_state.ly_r_start} - {st.session_state.ly_r_end}")
+            mgr.write_to_cell(st.session_state.current_tab, mappings['p4_qualify_amt'], p4_val)
+            mgr.write_to_cell(st.session_state.current_tab, mappings['q4_redeem_amt'], q4_val)
             
-            st.session_state.step = 2
+            # Move to Step 4
+            st.session_state.step = 4
             st.rerun()
 
     def render_step_4(self, mgr, config):
+        # --- Persistent Header ---
+        if 'current_tab' in st.session_state:
+            st.info(f"📁 **Currently Working On:** `{st.session_state.current_tab}`")
+            
         st.header("Step 4: Execute SQL")
         
         sql_sheet = config['sheets']['sql_output']
@@ -100,17 +115,15 @@ class Handler:
         if raw_sql and raw_sql.strip():
             injected_sql = str(raw_sql)
             
-            # Using Regex for robust replacement (handles missing spaces around the '=' sign)
             replacements = {
                 r"WbVarDef\s+qualify_start\s*=\s*''": f"WbVarDef qualify_start='{st.session_state.ty_q_start}'",
                 r"WbVarDef\s+qualify_end\s*=\s*''": f"WbVarDef qualify_end='{st.session_state.ty_q_end}'",
                 r"WbVarDef\s+ly_qualify_start\s*=\s*''": f"WbVarDef ly_qualify_start='{st.session_state.ly_q_start}'",
                 r"WbVarDef\s+ly_qualify_end\s*=\s*''": f"WbVarDef ly_qualify_end='{st.session_state.ly_q_end}'",
-                r"articl_list\s*=\s*\(\)": f"articl_list={st.session_state.sql_article_tuple}",
-                r"article_list\s*=\s*\(\)": f"article_list={st.session_state.sql_article_tuple}" # Backup spelling
+                r"articl_list\s*=\s*\(\)": f"articl_list={st.session_state.get('sql_article_tuple', '()')}",
+                r"article_list\s*=\s*\(\)": f"article_list={st.session_state.get('sql_article_tuple', '()')}" 
             }
             
-            # Apply all regex replacements
             for pattern, new_str in replacements.items():
                 injected_sql = re.sub(pattern, new_str, injected_sql, flags=re.IGNORECASE)
                 
@@ -118,20 +131,23 @@ class Handler:
             injected_sql = "-- Error: No SQL code found in designated column."
 
         st.code(injected_sql, language="sql")
-        st.info("Hover over the top right of the code block above to copy it. Run it externally.")
+        st.caption("Hover over the top right of the code block above to copy it. Run it externally.")
         
         if st.button("Enter SQL Output"):
-            st.session_state.step = 3
+            st.session_state.step = 5
             st.rerun()
 
     def render_step_5(self, mgr, config):
+        # --- Persistent Header ---
+        if 'current_tab' in st.session_state:
+            st.info(f"📁 **Currently Working On:** `{st.session_state.current_tab}`")
+            
         st.header("Step 5: Paste SQL Output")
-        st.info("Paste your output row below (tabs or spaces are fine):")
+        st.caption("Paste your output row below (tabs or spaces are fine):")
         sql_output_str = st.text_area("SQL Output")
         
         if st.button("Complete Analysis", type="primary"):
             if sql_output_str:
-                # Splits safely by any amount of whitespace (spaces, tabs, newlines)
                 parsed_data = [item.strip() for item in re.split(r'\s+', sql_output_str.strip()) if item]
                 
                 mgr.write_vertical_array(
@@ -140,7 +156,9 @@ class Handler:
                     parsed_data
                 )
                 
-                st.session_state.step = 4
+                st.success(f"Analysis complete for {st.session_state.current_tab}!")
+                # Reset to step 2 (or your main menu) to start the next tab
+                st.session_state.step = 2 
                 st.rerun()
             else:
                 st.warning("Please paste the SQL output first.")
