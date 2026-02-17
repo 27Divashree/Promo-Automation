@@ -1,0 +1,19 @@
+{
+    "template_file": "Your_Actual_Template.xlsx",
+    "display_name": "Standard Promo Template",
+    "sheets": {
+        "base_analysis": "recap_main",
+        "item_list": "item-List",
+        "sql_output": "sql_output"
+    },
+    "mappings": {
+        "ty_qualify_dates": "B3",
+        "ty_redeem_dates": "B4",
+        "ly_qualify_dates": "C3",
+        "ly_redeem_dates": "C4",
+        "p4_qualify_amt": "P4",
+        "q4_redeem_amt": "Q4",
+        "sql_output_start": "P34",
+        "sql_code_cell": "K1"
+    }
+}
