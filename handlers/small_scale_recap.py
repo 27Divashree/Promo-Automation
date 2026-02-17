@@ -26,7 +26,7 @@ class Handler:
 
         st.divider()
         st.subheader("3.2 Article List Upload")
-        uploaded_file = st.file_uploader(f"Upload Article CSV/Excel", type=['csv', 'xlsx'])
+        uploaded_file = st.file_uploader("Upload Article CSV/Excel", type=['csv', 'xlsx'])
         
         st.divider()
         st.subheader("3.3 Qualification/Redemption Amounts")
@@ -53,20 +53,24 @@ class Handler:
             
             # 1. Handle Article Append & SQL List Extraction
             if uploaded_file:
-                df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('csv') else pd.read_excel(uploaded_file)
-                
-                # Append to Excel (Assuming first 4 columns are A-D)
-                mgr.append_dataframe(config['sheets']['item_list'], df.iloc[:, :4])
-                
-                # Extract 'f1' column for SQL (Fallback to first column if 'f1' header is missing)
-                if 'f1' in df.columns:
-                    articles = df['f1'].dropna().astype(str).tolist()
+                # Read the file
+                if uploaded_file.name.endswith('csv'):
+                    df = pd.read_csv(uploaded_file)
                 else:
-                    articles = df.iloc[:, 0].dropna().astype(str).tolist()
+                    df = pd.read_excel(uploaded_file)
+                
+                # Extract the articles from the first column (Column A)
+                articles = df.iloc[:, 0].dropna().astype(str).tolist()
                 
                 # Format into SQL Tuple: ('123', '456', '789')
                 if articles:
                     st.session_state.sql_article_tuple = "(" + ", ".join([f"'{art}'" for art in articles]) + ")"
+
+                # A) Append the raw data (first 4 columns: A-D) to the Excel tab
+                mgr.append_dataframe(config['sheets']['item_list'], df.iloc[:, :4])
+                
+                # B) Write the formatted tuple string directly into cell F1 of the item_list tab
+                mgr.write_to_cell(config['sheets']['item_list'], 'F1', st.session_state.sql_article_tuple)
 
             # 2. Create Tab using the DYNAMICALLY selected base sheet
             tab_name = f"{st.session_state.promo_name} Qual"
@@ -102,7 +106,8 @@ class Handler:
                 r"WbVarDef\s+qualify_end\s*=\s*''": f"WbVarDef qualify_end='{st.session_state.ty_q_end}'",
                 r"WbVarDef\s+ly_qualify_start\s*=\s*''": f"WbVarDef ly_qualify_start='{st.session_state.ly_q_start}'",
                 r"WbVarDef\s+ly_qualify_end\s*=\s*''": f"WbVarDef ly_qualify_end='{st.session_state.ly_q_end}'",
-                r"articl_list\s*=\s*\(\)": f"articl_list={st.session_state.sql_article_tuple}"
+                r"articl_list\s*=\s*\(\)": f"articl_list={st.session_state.sql_article_tuple}",
+                r"article_list\s*=\s*\(\)": f"article_list={st.session_state.sql_article_tuple}" # Backup spelling
             }
             
             # Apply all regex replacements
@@ -126,6 +131,7 @@ class Handler:
         
         if st.button("Complete Analysis", type="primary"):
             if sql_output_str:
+                # Splits safely by any amount of whitespace (spaces, tabs, newlines)
                 parsed_data = [item.strip() for item in re.split(r'\s+', sql_output_str.strip()) if item]
                 
                 mgr.write_vertical_array(
