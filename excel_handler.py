@@ -49,6 +49,19 @@ class ExcelManager:
         output.seek(0)
         return output
     
+    def read_column(self, sheet_name, column_letter):
+        try:
+            ws = self.wb[sheet_name]
+            # Get all cells in the specified column
+            column_cells = ws[column_letter]
+            
+            # Extract text from cells, ignoring empty ones
+            sql_lines = [str(cell.value) for cell in column_cells if cell.value is not None]
+            
+            return "\n".join(sql_lines)
+        except Exception as e:
+            return f"-- Error reading SQL from {sheet_name} column {column_letter}: {e}"
+        
     def overwrite_item_list(self, sheet_name, df):
         import pandas as pd
         from openpyxl.utils.dataframe import dataframe_to_rows
