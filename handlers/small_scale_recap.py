@@ -91,52 +91,50 @@ class Handler:
 
     def render_step_4(self, mgr, config):
         st.header("Step 4: Execute SQL")
-
-        sql_sheet = config["sheets"]["sql_output"]
-        sql_cell = config["mappings"]["sql_code_cell"]
-        raw_sql = mgr.read_cell(sql_sheet, sql_cell)
-
-        if raw_sql:
+        
+        sql_sheet = config['sheets']['sql_output']
+        # UPDATED: Now looks for 'sql_code_col' instead of 'sql_code_cell'
+        sql_col = config['mappings']['sql_code_col']
+        
+        # UPDATED: Uses the new read_column method to get everything in column K
+        raw_sql = mgr.read_column(sql_sheet, sql_col)
+        
+        # Only process if we actually found text (checking if it's mostly empty lines)
+        if raw_sql and raw_sql.strip():
             replacements = {
                 "wbvarwef ty_qualify_start = ''": f"wbvarwef ty_qualify_start = '{st.session_state.ty_q_start}'",
                 "wbvarwef ty_qualify_end = ''": f"wbvarwef ty_qualify_end = '{st.session_state.ty_q_end}'",
-                "wbvarwef qualify_amt = ''": f"wbvarwef qualify_amt = '{st.session_state.p4_val}'",
+                "wbvarwef qualify_amt = ''": f"wbvarwef qualify_amt = '{st.session_state.p4_val}'"
             }
             injected_sql = str(raw_sql)
             for old_str, new_str in replacements.items():
                 injected_sql = injected_sql.replace(old_str, new_str)
         else:
-            injected_sql = "-- Error: No SQL code found in designated cell."
+            injected_sql = "-- Error: No SQL code found in designated column."
 
         st.code(injected_sql, language="sql")
-        st.info(
-            "Hover over the top right of the code block above to copy it. Run it externally."
-        )
-
+        st.info("Hover over the top right of the code block above to copy it. Run it externally.")
+        
         if st.button("Enter SQL Output"):
             st.session_state.step = 3
             st.rerun()
 
     def render_step_5(self, mgr, config):
         st.header("Step 5: Paste SQL Output")
-        sql_output_str = st.text_area(
-            "Paste single row output (tab or comma separated)"
-        )
-
+        st.info("Paste your space-delimited output row below:")
+        sql_output_str = st.text_area("SQL Output")
+        
         if st.button("Complete Analysis", type="primary"):
             if sql_output_str:
-                parsed_data = [
-                    item.strip()
-                    for item in re.split(r"[\t,]+", sql_output_str.strip())
-                    if item
-                ]
-
+                # UPDATED: Splits by any amount of spaces (handles single or multiple spaces seamlessly)
+                parsed_data = [item.strip() for item in re.split(r' +', sql_output_str.strip()) if item]
+                
                 mgr.write_vertical_array(
-                    st.session_state.current_tab,
-                    config["mappings"]["sql_output_start"],
-                    parsed_data,
+                    st.session_state.current_tab, 
+                    config['mappings']['sql_output_start'], 
+                    parsed_data
                 )
-
+                
                 st.session_state.step = 4
                 st.rerun()
             else:

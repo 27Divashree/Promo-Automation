@@ -15,6 +15,6 @@
         "p4_qualify_amt": "P4",
         "q4_redeem_amt": "Q4",
         "sql_output_start": "P34",
-        "sql_code_cell": "K1"
+        "sql_code_col": "K"
     }
 }

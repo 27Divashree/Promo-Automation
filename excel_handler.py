@@ -48,3 +48,16 @@ class ExcelManager:
         self.wb.save(output)
         output.seek(0)
         return output
+    
+    def read_column(self, sheet_name, col_letter):
+        """Reads an entire column and joins the text (useful for multi-line SQL)"""
+        sheet = self.wb[sheet_name]
+        data = []
+        # Loop through every row in the column up to the max row
+        for row in range(1, sheet.max_row + 1):
+            val = sheet[f"{col_letter}{row}"].value
+            # Append the value, or a blank string if the cell is empty (preserves spacing)
+            data.append(str(val) if val is not None else "")
+        
+        # Join it all together with line breaks
+        return "\n".join(data)
