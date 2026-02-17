@@ -92,3 +92,28 @@ elif st.session_state.step == 3:
 # ==========================================
 elif st.session_state.step == 4:
     st.success(f"Sheet '{st.session_state.current_tab}' completed successfully!")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Add More Tabs (Another Base Sheet)"):
+            st.session_state.step = 1
+            st.rerun()
+            
+    with col2:
+        output_bytes = st.session_state.excel_mgr.get_download_bytes()
+        file_name = f"{st.session_state.promo_name}_Analysis.xlsx"
+        
+        st.download_button("Generate & Download Workbook", data=output_bytes, file_name=file_name,
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           on_click=lambda: st.session_state.update(step=5))
+
+# ==========================================
+# APP LEVEL: Reset
+# ==========================================
+elif st.session_state.step == 5:
+    st.success("Workbook generated successfully!")
+    st.balloons()
+    
+    if st.button("Start New Promotion completely"):
+        st.session_state.clear() 
+        st.rerun()
