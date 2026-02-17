@@ -34,26 +34,51 @@ class Handler:
         q4_val = st.number_input("Redemption Amount (Q4)", value=0.0)
         
         if st.button("Generate SQL & Create Tab", type="primary"):
+            
+            # Format dates to mm/dd/yyyy strictly for both SQL and Excel
+            fmt = '%m/%d/%Y'
             st.session_state.update({
-                "ty_q_start": ty_q_start, "ty_q_end": ty_q_end, "p4_val": p4_val
+                "ty_q_start": ty_q_start.strftime(fmt), 
+                "ty_q_end": ty_q_end.strftime(fmt),
+                "ty_r_start": ty_r_start.strftime(fmt), 
+                "ty_r_end": ty_r_end.strftime(fmt),
+                "ly_q_start": ly_q_start.strftime(fmt), 
+                "ly_q_end": ly_q_end.strftime(fmt),
+                "ly_r_start": ly_r_start.strftime(fmt), 
+                "ly_r_end": ly_r_end.strftime(fmt),
+                "p4_val": p4_val,
+                "q4_val": q4_val,
+                "sql_article_tuple": "()" # Default empty tuple
             })
             
-            # 1. Append Articles
+            # 1. Handle Article Append & SQL List Extraction
             if uploaded_file:
                 df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('csv') else pd.read_excel(uploaded_file)
-                mgr.append_dataframe(config['sheets']['item_list'], df)
+                
+                # Append to Excel (Assuming first 4 columns are A-D)
+                mgr.append_dataframe(config['sheets']['item_list'], df.iloc[:, :4])
+                
+                # Extract 'f1' column for SQL (Fallback to first column if 'f1' header is missing)
+                if 'f1' in df.columns:
+                    articles = df['f1'].dropna().astype(str).tolist()
+                else:
+                    articles = df.iloc[:, 0].dropna().astype(str).tolist()
+                
+                # Format into SQL Tuple: ('123', '456', '789')
+                if articles:
+                    st.session_state.sql_article_tuple = "(" + ", ".join([f"'{art}'" for art in articles]) + ")"
 
             # 2. Create Tab using the DYNAMICALLY selected base sheet
             tab_name = f"{st.session_state.promo_name} Qual"
             st.session_state.current_tab = tab_name
             mgr.create_promo_tab(st.session_state.base_sheet, tab_name)
             
-            # 3. Write data to the newly created tab
+            # 3. Write data to the newly created tab using the mm/dd/yyyy formatted dates
             mappings = config['mappings']
-            mgr.write_to_cell(tab_name, mappings['ty_qualify_dates'], f"{ty_q_start} - {ty_q_end}")
-            mgr.write_to_cell(tab_name, mappings['ty_redeem_dates'], f"{ty_r_start} - {ty_r_end}")
-            mgr.write_to_cell(tab_name, mappings['ly_qualify_dates'], f"{ly_q_start} - {ly_q_end}")
-            mgr.write_to_cell(tab_name, mappings['ly_redeem_dates'], f"{ly_r_start} - {ly_r_end}")
+            mgr.write_to_cell(tab_name, mappings['ty_qualify_dates'], f"{st.session_state.ty_q_start} - {st.session_state.ty_q_end}")
+            mgr.write_to_cell(tab_name, mappings['ty_redeem_dates'], f"{st.session_state.ty_r_start} - {st.session_state.ty_r_end}")
+            mgr.write_to_cell(tab_name, mappings['ly_qualify_dates'], f"{st.session_state.ly_q_start} - {st.session_state.ly_q_end}")
+            mgr.write_to_cell(tab_name, mappings['ly_redeem_dates'], f"{st.session_state.ly_r_start} - {st.session_state.ly_r_end}")
             mgr.write_to_cell(tab_name, mappings['p4_qualify_amt'], p4_val)
             mgr.write_to_cell(tab_name, mappings['q4_redeem_amt'], q4_val)
             
@@ -69,14 +94,21 @@ class Handler:
         raw_sql = mgr.read_column(sql_sheet, sql_col)
         
         if raw_sql and raw_sql.strip():
-            replacements = {
-                "wbvarwef ty_qualify_start = ''": f"wbvarwef ty_qualify_start = '{st.session_state.ty_q_start}'",
-                "wbvarwef ty_qualify_end = ''": f"wbvarwef ty_qualify_end = '{st.session_state.ty_q_end}'",
-                "wbvarwef qualify_amt = ''": f"wbvarwef qualify_amt = '{st.session_state.p4_val}'"
-            }
             injected_sql = str(raw_sql)
-            for old_str, new_str in replacements.items():
-                injected_sql = injected_sql.replace(old_str, new_str)
+            
+            # Using Regex for robust replacement (handles missing spaces around the '=' sign)
+            replacements = {
+                r"WbVarDef\s+qualify_start\s*=\s*''": f"WbVarDef qualify_start='{st.session_state.ty_q_start}'",
+                r"WbVarDef\s+qualify_end\s*=\s*''": f"WbVarDef qualify_end='{st.session_state.ty_q_end}'",
+                r"WbVarDef\s+ly_qualify_start\s*=\s*''": f"WbVarDef ly_qualify_start='{st.session_state.ly_q_start}'",
+                r"WbVarDef\s+ly_qualify_end\s*=\s*''": f"WbVarDef ly_qualify_end='{st.session_state.ly_q_end}'",
+                r"articl_list\s*=\s*\(\)": f"articl_list={st.session_state.sql_article_tuple}"
+            }
+            
+            # Apply all regex replacements
+            for pattern, new_str in replacements.items():
+                injected_sql = re.sub(pattern, new_str, injected_sql, flags=re.IGNORECASE)
+                
         else:
             injected_sql = "-- Error: No SQL code found in designated column."
 
@@ -89,12 +121,12 @@ class Handler:
 
     def render_step_5(self, mgr, config):
         st.header("Step 5: Paste SQL Output")
-        st.info("Paste your space-delimited output row below:")
+        st.info("Paste your output row below (tabs or spaces are fine):")
         sql_output_str = st.text_area("SQL Output")
         
         if st.button("Complete Analysis", type="primary"):
             if sql_output_str:
-                parsed_data = [item.strip() for item in re.split(r' +', sql_output_str.strip()) if item]
+                parsed_data = [item.strip() for item in re.split(r'\s+', sql_output_str.strip()) if item]
                 
                 mgr.write_vertical_array(
                     st.session_state.current_tab, 
