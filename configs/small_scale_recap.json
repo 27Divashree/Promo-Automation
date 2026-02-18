@@ -5,7 +5,9 @@
     "sheets": {
         "base_analysis": "recap_main",
         "item_list": "item-List",
-        "sql_output": "sql_output"
+        "sql_output": "sql_output",
+        "allowed_base_sheets": ["recap_main","recap_r_main"],
+        "remove_on_export": ["recap_main","recap_r_main"]
     },
     "mappings": {
         "ty_qualify_dates": "B3",

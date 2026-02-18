@@ -78,3 +78,9 @@ class ExcelManager:
                 # Skip blank cells so we don't paste "NaN"
                 if pd.notna(value):
                     sheet.cell(row=r_idx, column=c_idx, value=value)
+
+    def remove_unwanted_sheets(self, sheets_to_remove):
+        """Deletes specified backend/template sheets before final export."""
+        for sheet in sheets_to_remove:
+            if sheet in self.wb.sheetnames:
+                del self.wb[sheet]
