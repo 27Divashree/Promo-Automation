@@ -1,76 +1,49 @@
-#render step 3
-# Handle Article List processing safely
-            if uploaded_file:
-                uploaded_file.seek(0) 
-                
-                if uploaded_file.name.endswith('csv'):
-                    df = pd.read_csv(uploaded_file, header=None)
-                else:
-                    df = pd.read_excel(uploaded_file, sheet_name=selected_article_sheet, header=None, engine='calamine')
-                
-                if df.shape[1] >= 6:
-                    f1_raw = df.iloc[0, 5]
-                    if pd.notna(f1_raw):
-                        st.session_state.sql_article_tuple = str(f1_raw)
-
-                # --- NEW: Smart Article List Tab Creation ---
-                # Create a unique fingerprint for this dataframe
-                current_df_hash = hash(df.to_string())
-                
-                if st.session_state.get('last_article_hash') != current_df_hash:
-                    # It's new! Save it to a new tab.
-                    new_item_sheet = f"Items_{st.session_state.current_tab}"
-                    mgr.overwrite_item_list(new_item_sheet, df) 
-                    st.session_state.last_article_hash = current_df_hash
-                    st.toast(f"Saved new article list to {new_item_sheet}")
-                else:
-                    st.toast("Identical article list detected. Skipped duplicate tab creation.")
-
-
-
-#render step-4
-# Save the finalized SQL so Step 5 can use it!
-        st.session_state.final_sql = injected_sql 
-        
-        st.code(injected_sql, language="sql")
-
-#render step-5
 def render_step_5(self, mgr, config):
         render_persistent_header()
         st.header("Step 5: Paste SQL Output")
-        st.caption("Paste your 2 rows of output below (headers and data):")
+        st.caption("Paste your output rows below (Include Headers + Data):")
         sql_output_str = st.text_area("SQL Output")
         
         if st.button("Complete Analysis", type="primary"):
             if sql_output_str:
-                # 1. Split the text into separate rows based on line breaks
-                rows = [r.strip() for r in sql_output_str.strip().split('\n') if r.strip()]
+                # 1. Split the text area into separate lines
+                raw_lines = [line for line in sql_output_str.strip().split('\n') if line.strip()]
                 
-                # Parse Row 1 and Row 2 (Fallback to empty arrays if missing)
-                row1_data = [item.strip() for item in re.split(r'\s+', rows[0])] if len(rows) > 0 else []
-                row2_data = [item.strip() for item in re.split(r'\s+', rows[1])] if len(rows) > 1 else []
-                
-                # 2. Write Row 2 vertically to your MAIN tab (Column P)
-                if row2_data:
-                    mgr.write_vertical_array(st.session_state.current_tab, config['mappings']['sql_output_start'], row2_data)
-                
-                # 3. Create the new SQL Audit Tab
-                audit_tab_name = f"{st.session_state.current_tab}_sql"
-                mgr.wb.create_sheet(audit_tab_name)
-                ws_audit = mgr.wb[audit_tab_name]
-                
-                # 4. Write Row 1 & Row 2 to Columns A-I
-                for col_idx, val in enumerate(row1_data[:9], start=1):
-                    ws_audit.cell(row=1, column=col_idx, value=val)
-                for col_idx, val in enumerate(row2_data[:9], start=1):
-                    ws_audit.cell(row=2, column=col_idx, value=val)
+                if len(raw_lines) >= 2:
+                    # Smart split: Use tabs if they exist (standard SQL copy), else split by spaces
+                    sep = '\t' if '\t' in raw_lines[0] else None 
                     
-                # 5. Write the actual SQL code to Column K
-                if 'final_sql' in st.session_state:
-                    ws_audit['K1'] = st.session_state.final_sql
-                
-                st.success(f"Analysis complete! Main tab updated and `{audit_tab_name}` created.")
-                st.session_state.step = 6 
-                st.rerun()
+                    headers = [item.strip() for item in raw_lines[0].split(sep) if item.strip()]
+                    data_row = [item.strip() for item in raw_lines[1].split(sep) if item.strip()]
+                    
+                    # 2. Write the Data (Row 2) vertically to the Main Tab
+                    mgr.write_vertical_array(st.session_state.current_tab, config['mappings']['sql_output_start'], data_row)
+                    
+                    # 3. Safely Create the SQL Tab
+                    clean_tab_name = re.sub(r'[\\/*?:\[\]]', '', st.session_state.current_tab)
+                    sql_tab_name = f"sql_{clean_tab_name}"[:31]
+                    
+                    if sql_tab_name not in mgr.wb.sheetnames:
+                        mgr.wb.create_sheet(sql_tab_name)
+                        
+                    sql_sheet = mgr.wb[sql_tab_name]
+                    
+                    # 4. Write Headers (Row 1) and Data (Row 2) horizontally (A-I)
+                    for col_idx, header_val in enumerate(headers, start=1):
+                        sql_sheet.cell(row=1, column=col_idx, value=header_val)
+                        
+                    for col_idx, data_val in enumerate(data_row, start=1):
+                        sql_sheet.cell(row=2, column=col_idx, value=data_val)
+                        
+                    # 5. Write SQL code line-by-line down column K
+                    saved_sql = st.session_state.get('final_sql', '-- No SQL found')
+                    sql_lines = [line for line in saved_sql.split('\n')]
+                    mgr.write_vertical_array(sql_tab_name, 'K1', sql_lines)
+
+                    st.success(f"Analysis complete for {st.session_state.current_tab}! SQL & Data saved to {sql_tab_name}.")
+                    st.session_state.step = 6 
+                    st.rerun()
+                else:
+                    st.warning("Please paste at least two rows (Headers and Data).")
             else:
                 st.warning("Please paste the SQL output first.")
