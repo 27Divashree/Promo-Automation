@@ -84,3 +84,25 @@ class ExcelManager:
         for sheet in sheets_to_remove:
             if sheet in self.wb.sheetnames:
                 del self.wb[sheet]
+
+    def add_raw_sheet(self, sheet_name, df):
+        """Creates a new sheet and pastes a dataframe into it exactly as-is."""
+        if sheet_name in self.wb.sheetnames:
+            del self.wb[sheet_name]
+        ws = self.wb.create_sheet(sheet_name)
+        
+        from openpyxl.utils.dataframe import dataframe_to_rows
+        for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
+            for c_idx, value in enumerate(row, 1):
+                ws.cell(row=r_idx, column=c_idx, value=value)
+
+    def write_vertical_array(self, sheet_name, start_cell, data_list):
+        sheet = self.wb[sheet_name]
+        col = start_cell[0]
+        start_row = int(start_cell[1:])
+        for i, val in enumerate(data_list):
+            try:
+                val_to_write = float(val)
+            except ValueError:
+                val_to_write = val
+            sheet[f"{col}{start_row + i}"] = val_to_write

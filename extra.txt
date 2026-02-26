@@ -1,100 +1,68 @@
-#app.py 
-with st.sidebar:
-        st.title("Settings")
-        
-        # ---> ADD THE START OVER BUTTON HERE
-        if st.button("🔄 Start Over / Reset App", type="secondary", use_container_width=True):
-            st.session_state.clear()
-            st.rerun()
-            
-        st.divider()
+import streamlit as st
+import datetime
+import pandas as pd
+from components import render_article_upload, render_persistent_header
 
-##small-scale recap
-"""step-3
-def render_step_3(self, mgr, config):
+class Handler:
+    def render_step_3(self, mgr, config):
         render_persistent_header()
-        st.header(f"Step 3: Configuration for {st.session_state.current_tab}")
+        st.header(f"Step 3: Inputs for {st.session_state.current_tab}")
         
-        # 1. Wrap inputs in a form to prevent UI lag
-        with st.form("config_form"):
-            # Call your date input component
-            dates = render_date_inputs() 
-            
-            st.subheader("Amounts")
-            col1, col2 = st.columns(2)
+        ext = st.session_state.get('extracted', {})
+        today = datetime.date.today()
+
+        with st.form("lly_input_form"):
+            col1, col2, col3 = st.columns(3)
             with col1:
-                p4_val = st.number_input("P4 Qualify Amount", min_value=0.0, step=1.0)
+                st.subheader("TY")
+                tqs = st.date_input("TY Qualify Start", value=ext.get("ty_qs", today))
+                tqe = st.date_input("TY Qualify End", value=ext.get("ty_qe", today))
+                trs = st.date_input("TY Redeem Start", value=ext.get("ty_rs", today))
+                tre = st.date_input("TY Redeem End", value=ext.get("ty_re", today))
             with col2:
-                q4_val = st.number_input("Q4 Redeem Amount", min_value=0.0, step=1.0)
-                
-            # File upload component
-            st.subheader("Article List")
-            uploaded_file = render_article_upload()
-            
-            # 2. Form Submit Button
-            submitted = st.form_submit_button("Save Inputs & Generate SQL", type="primary")
-            
-        # 3. Validation & Processing (Only runs when clicked!)
-        if submitted:
-            # --- VALIDATION CHECKS ---
-            if dates['ty_q_start'] > dates['ty_q_end']:
-                st.error("❌ TY Qualify Start date cannot be after the End date!")
-                return
-            if dates['ly_q_start'] > dates['ly_q_end']:
-                st.error("❌ LY Qualify Start date cannot be after the End date!")
-                return
-            if p4_val <= 0 and q4_val <= 0:
-                st.warning("⚠️ Did you forget to enter a Qualification or Redemption Amount?")
-                return
-            if not uploaded_file:
-                st.error("❌ Please upload an article list to proceed.")
-                return
-                
-            # --- PROCESSING (With a Loading Spinner!) ---
-            with st.spinner("Processing file and writing inputs to Excel..."):
-                # Write Dates to Excel
-                mgr.write_cell(st.session_state.current_tab, config['mappings']['ty_q_start'], dates['ty_q_start'].strftime('%m/%d/%Y'))
-                mgr.write_cell(st.session_state.current_tab, config['mappings']['ty_q_end'], dates['ty_q_end'].strftime('%m/%d/%Y'))
-                # (... add the rest of your date writes here)
-                
-                # Write Amounts to Excel
-                mgr.write_cell(st.session_state.current_tab, config['mappings']['p4_qualify_amt'], p4_val)
-                mgr.write_cell(st.session_state.current_tab, config['mappings']['q4_redeem_amt'], q4_val)
-                
-                # Handle Article List processing
-                uploaded_file.seek(0) 
-                if uploaded_file.name.endswith('csv'):
-                    df = pd.read_csv(uploaded_file, header=None)
-                else:
-                    # Note: Assumes selected_article_sheet is returned by render_article_upload, or adjust as needed.
-                    df = pd.read_excel(uploaded_file, header=None) 
-                
-                if df.shape[1] >= 6:
-                    f1_raw = df.iloc[0, 5]
-                    if pd.notna(f1_raw):
-                        st.session_state.sql_article_tuple = str(f1_raw)
+                st.subheader("LY")
+                lqs = st.date_input("LY Qualify Start", value=ext.get("ly_qs", today))
+                lqe = st.date_input("LY Qualify End", value=ext.get("ly_qe", today))
+                lrs = st.date_input("LY Redeem Start", value=ext.get("ly_rs", today))
+                lre = st.date_input("LY Redeem End", value=ext.get("ly_re", today))
+            with col3:
+                st.subheader("LLY (Auto)")
+                # LLY Logic: LY Date + 1 Day
+                st.date_input("LLY Qualify Start", value=lqs + datetime.timedelta(days=1), disabled=True)
+                st.date_input("LLY Qualify End", value=lqe + datetime.timedelta(days=1), disabled=True)
+                st.date_input("LLY Redeem Start", value=lrs + datetime.timedelta(days=1), disabled=True)
+                st.date_input("LLY Redeem End", value=lre + datetime.timedelta(days=1), disabled=True)
 
-                # Dynamically name and write the item list tab safely
-                clean_tab_name = re.sub(r'[\\/*?:\[\]]', '', st.session_state.current_tab)
-                item_sheet_name = f"Items_{clean_tab_name}"[:31]
-                mgr.overwrite_item_list(item_sheet_name, df)
-                
-                # Move to next step
-                st.success("Inputs saved successfully!")
-                time.sleep(0.5) # Brief pause so the user sees the success message
-                st.session_state.step = 4
-                st.rerun()
+            st.divider()
+            c1, c2 = st.columns(2)
+            with c1: p4_v = st.number_input("P4 Amount", value=float(ext.get("q_amt", 0.0)))
+            with c2: q4_v = st.number_input("Q4 Amount", value=float(ext.get("r_amt", 0.0)))
+            
+            uploaded_file, art_sheet = render_article_upload()
+            submit = st.form_submit_button("Confirm & Generate SQL")
 
-"""step 5
-if st.button("Complete Analysis", type="primary"):
-            if sql_output_str:
-                with st.spinner("Formatting Data and Updating Workbook..."):
-                    # 1. Split the text area into separate lines
-                    raw_lines = [line for line in sql_output_str.strip().split('\n') if line.strip()]
-                    
-                    # ... (Keep all your existing parsing and Excel writing code here exactly as is) ...
-                    
-                    st.success(f"Analysis complete for {st.session_state.current_tab}! SQL & Data saved.")
-                    time.sleep(1) # Let them read the success message
-                    st.session_state.step = 6 
-                    st.rerun()
+        if submit:
+            fmt = '%m/%d/%Y'
+            st.session_state.update({
+                "ty_q_start": tqs.strftime(fmt), "ty_q_end": tqe.strftime(fmt),
+                "ty_r_start": trs.strftime(fmt), "ty_r_end": tre.strftime(fmt),
+                "ly_q_start": lqs.strftime(fmt), "ly_q_end": lqe.strftime(fmt),
+                "ly_r_start": lrs.strftime(fmt), "ly_r_end": lre.strftime(fmt)
+            })
+            
+            # Use mappings from your JSON
+            mgr.write_to_cell(st.session_state.current_tab, config['mappings']['p4_qualify_amt'], p4_v)
+            mgr.write_to_cell(st.session_state.current_tab, config['mappings']['q4_redeem_amt'], q4_v)
+            
+            # Handle Article List
+            df_art = pd.read_excel(uploaded_file, sheet_name=art_sheet)
+            st.session_state.sql_article_tuple = f"({', '.join(map(str, df_art.iloc[:,0].tolist()))})"
+            mgr.add_raw_sheet(f"Items_{st.session_state.current_tab}"[:31], df_art)
+            
+            st.session_state.step = 4
+            st.rerun()
+
+    def render_step_4(self, mgr, config):
+        from handlers.small_scale_recap import Handler as Base; Base.render_step_4(self, mgr, config)
+    def render_step_5(self, mgr, config):
+        from handlers.small_scale_recap import Handler as Base; Base.render_step_5(self, mgr, config)

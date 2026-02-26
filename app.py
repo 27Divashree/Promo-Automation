@@ -63,7 +63,7 @@ if st.session_state.step == 1:
                 st.session_state.template_handler = module.Handler()
                 
                 # 4. Move to Step 2
-                st.session_state.step = 2
+                st.session_state.step = 1.5
                 st.rerun()
                 
             except FileNotFoundError:
@@ -77,6 +77,49 @@ if st.session_state.step == 1:
             except Exception as e:
                 st.error(f"❌ An unexpected error occurred: {e}")
 
+# ==========================================
+# Step 1.5: Select Request Form data if available
+# ==========================================
+elif st.session_state.step == 1.5:
+    st.header("Step 1.5: Data Input Preference")
+    method = st.radio(
+        "Do you have a Request Form for this promotion?",
+        ["Yes - Upload and Auto-extract", "No - I will enter details manually"]
+    )
+    
+    if method == "Yes - Upload and Auto-extract":
+        req_file = st.file_uploader("Upload Excel Request Form", type=['xlsx'])
+        if req_file:
+            if st.button("Process & Continue"):
+                import openpyxl
+                import pandas as pd
+                # Extract from C13, C14, etc.
+                rb = openpyxl.load_workbook(req_file, data_only=True)
+                rs = rb.active
+                
+                def get_val(cell):
+                    val = rs[cell].value
+                    return val.date() if hasattr(val, 'date') else val
+
+                st.session_state.extracted = {
+                    "ty_qs": get_val("C13"), "ty_qe": get_val("C14"),
+                    "ty_rs": get_val("C19"), "ty_re": get_val("C20"),
+                    "ly_qs": get_val("C19"), "ly_qe": get_val("C20"), # Per your instruction ly is mapped from these
+                    "ly_rs": get_val("C26"), "ly_re": get_val("C27"),
+                    "q_amt": rs["C21"].value,
+                    "r_amt": rs["C22"].value
+                }
+                # Save the Request Form to a new tab named "Request Form"
+                df_req = pd.read_excel(req_file)
+                st.session_state.excel_mgr.add_raw_sheet("Request Form", df_req)
+                
+                st.session_state.step = 2
+                st.rerun()
+    else:
+        if st.button("Continue to Manual Entry"):
+            st.session_state.extracted = {} # Clear extracted data
+            st.session_state.step = 2
+            st.rerun()
 # ==========================================
 # Step 2: Base Sheet & Tab Naming
 # ==========================================
@@ -107,7 +150,7 @@ elif st.session_state.step == 2:
     st.divider()
     st.subheader("Name Your New Tab")
     
-    prefix = f"{st.session_state.promo_name}_small_scale_"
+    prefix = f"{st.session_state.promo_name}_"
     st.caption(f"**Prefix:** `{prefix}`")
     user_suffix = st.text_input("Enter the rest of the tab name:", value="Qual")
     
