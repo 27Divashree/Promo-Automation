@@ -22,8 +22,8 @@ class Handler:
         
         # 3. Handler-Specific Inputs (Amounts might vary per template, so we keep them here)
         st.subheader("Qualification/Redemption Amounts")
-        p4_val = st.number_input("Qualification Amount (P4)", value=0.0)
-        q4_val = st.number_input("Redemption Amount (Q4)", value=0.0)
+        qual_val = st.number_input("Qualification Amount", value=0.0)
+        redeem_val = st.number_input("Redemption Amount", value=0.0)
         st.divider()
         
         if st.button("Generate SQL & Create Tab", type="primary"):
@@ -39,8 +39,8 @@ class Handler:
                 "ly_q_end": dates['ly_q_end'].strftime(fmt),
                 "ly_r_start": dates['ly_r_start'].strftime(fmt), 
                 "ly_r_end": dates['ly_r_end'].strftime(fmt),
-                "p4_val": p4_val,
-                "q4_val": q4_val,
+                "qual_val": qual_val,
+                "redeem_val": redeem_val,
                 "sql_article_tuple": "()" # Default fallback
             })
             
@@ -69,8 +69,8 @@ class Handler:
             mgr.write_to_cell(st.session_state.current_tab, mappings['ty_redeem_dates'], f"{st.session_state.ty_r_start} - {st.session_state.ty_r_end}")
             mgr.write_to_cell(st.session_state.current_tab, mappings['ly_qualify_dates'], f"{st.session_state.ly_q_start} - {st.session_state.ly_q_end}")
             mgr.write_to_cell(st.session_state.current_tab, mappings['ly_redeem_dates'], f"{st.session_state.ly_r_start} - {st.session_state.ly_r_end}")
-            mgr.write_to_cell(st.session_state.current_tab, mappings['p4_qualify_amt'], p4_val)
-            mgr.write_to_cell(st.session_state.current_tab, mappings['q4_redeem_amt'], q4_val)
+            mgr.write_to_cell(st.session_state.current_tab, mappings['qualify_amt'], qual_val)
+            mgr.write_to_cell(st.session_state.current_tab, mappings['redeem_amt'], redeem_val)
             
             st.session_state.step = 4
             st.rerun()

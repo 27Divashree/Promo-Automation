@@ -14,8 +14,8 @@
         "ty_redeem_dates": "B4",
         "ly_qualify_dates": "C3",
         "ly_redeem_dates": "C4",
-        "p4_qualify_amt": "P4",
-        "q4_redeem_amt": "Q4",
+        "qualify_amt": "P4",
+        "redeem_amt": "Q4",
         "sql_output_start": "P34",
         "sql_code_col": "K"
     }
