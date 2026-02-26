@@ -1,68 +1,46 @@
-import streamlit as st
-import datetime
-import pandas as pd
-from components import render_article_upload, render_persistent_header
+if submit:
+            # ... (previous code for dates and validation) ...
 
-class Handler:
-    def render_step_3(self, mgr, config):
-        render_persistent_header()
-        st.header(f"Step 3: Inputs for {st.session_state.current_tab}")
-        
-        ext = st.session_state.get('extracted', {})
-        today = datetime.date.today()
+            # Dictionary to store counts
+            article_counts = {"TY": 0, "LY": 0, "LLY": 0}
+            
+            art_files = {"TY": u_ty, "LY": u_ly, "LLY": u_lly}
+            for label, fobj in art_files.items():
+                fobj.seek(0)
+                # Read file
+                df = pd.read_excel(fobj, header=None) if fobj.name.endswith('xlsx') else pd.read_csv(fobj, header=None)
+                
+                # --- COUNT ARTICLES IN COL B (Index 1) ---
+                if df.shape[1] >= 2:
+                    # Count non-null unique articles in Column B
+                    count = df.iloc[:, 1].dropna().nunique()
+                    article_counts[label] = count
+                
+                # Capture SQL Tuple from TY file (Col F / Index 5)
+                if label == "TY" and df.shape[1] >= 6:
+                    st.session_state.sql_article_tuple = str(df.iloc[0, 5])
+                
+                # Save raw sheets to workbook
+                mgr.add_raw_sheet(f"{label}_Items_{new_tab_name}"[:31], df)
 
-        with st.form("lly_input_form"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.subheader("TY")
-                tqs = st.date_input("TY Qualify Start", value=ext.get("ty_qs", today))
-                tqe = st.date_input("TY Qualify End", value=ext.get("ty_qe", today))
-                trs = st.date_input("TY Redeem Start", value=ext.get("ty_rs", today))
-                tre = st.date_input("TY Redeem End", value=ext.get("ty_re", today))
-            with col2:
-                st.subheader("LY")
-                lqs = st.date_input("LY Qualify Start", value=ext.get("ly_qs", today))
-                lqe = st.date_input("LY Qualify End", value=ext.get("ly_qe", today))
-                lrs = st.date_input("LY Redeem Start", value=ext.get("ly_rs", today))
-                lre = st.date_input("LY Redeem End", value=ext.get("ly_re", today))
-            with col3:
-                st.subheader("LLY (Auto)")
-                # LLY Logic: LY Date + 1 Day
-                st.date_input("LLY Qualify Start", value=lqs + datetime.timedelta(days=1), disabled=True)
-                st.date_input("LLY Qualify End", value=lqe + datetime.timedelta(days=1), disabled=True)
-                st.date_input("LLY Redeem Start", value=lrs + datetime.timedelta(days=1), disabled=True)
-                st.date_input("LLY Redeem End", value=lre + datetime.timedelta(days=1), disabled=True)
+            # --- CREATE TAB & WRITE DATA ---
+            mgr.create_promo_tab(st.session_state.selected_base, new_tab_name)
+            m = config['mappings']
+            
+            # Write Dates
+            mgr.write_to_cell(new_tab_name, m['ty_qualify_dates'], ty_display)
+            mgr.write_to_cell(new_tab_name, m['ly_qualify_dates'], ly_display)
+            if current_phase == "LIFT" and 'lly_qualify_dates' in m:
+                mgr.write_to_cell(new_tab_name, m['lly_qualify_dates'], lly_display)
 
-            st.divider()
-            c1, c2 = st.columns(2)
-            with c1: p4_v = st.number_input("P4 Amount", value=float(ext.get("q_amt", 0.0)))
-            with c2: q4_v = st.number_input("Q4 Amount", value=float(ext.get("r_amt", 0.0)))
-            
-            uploaded_file, art_sheet = render_article_upload()
-            submit = st.form_submit_button("Confirm & Generate SQL")
+            # --- WRITE ARTICLE COUNTS ---
+            # Map the counts to the cells defined in JSON
+            if 'ty_article_count' in m:
+                mgr.write_to_cell(new_tab_name, m['ty_article_count'], article_counts["TY"])
+            if 'ly_article_count' in m:
+                mgr.write_to_cell(new_tab_name, m['ly_article_count'], article_counts["LY"])
+            if 'lly_article_count' in m:
+                mgr.write_to_cell(new_tab_name, m['lly_article_count'], article_counts["LLY"])
 
-        if submit:
-            fmt = '%m/%d/%Y'
-            st.session_state.update({
-                "ty_q_start": tqs.strftime(fmt), "ty_q_end": tqe.strftime(fmt),
-                "ty_r_start": trs.strftime(fmt), "ty_r_end": tre.strftime(fmt),
-                "ly_q_start": lqs.strftime(fmt), "ly_q_end": lqe.strftime(fmt),
-                "ly_r_start": lrs.strftime(fmt), "ly_r_end": lre.strftime(fmt)
-            })
-            
-            # Use mappings from your JSON
-            mgr.write_to_cell(st.session_state.current_tab, config['mappings']['p4_qualify_amt'], p4_v)
-            mgr.write_to_cell(st.session_state.current_tab, config['mappings']['q4_redeem_amt'], q4_v)
-            
-            # Handle Article List
-            df_art = pd.read_excel(uploaded_file, sheet_name=art_sheet)
-            st.session_state.sql_article_tuple = f"({', '.join(map(str, df_art.iloc[:,0].tolist()))})"
-            mgr.add_raw_sheet(f"Items_{st.session_state.current_tab}"[:31], df_art)
-            
             st.session_state.step = 4
             st.rerun()
-
-    def render_step_4(self, mgr, config):
-        from handlers.small_scale_recap import Handler as Base; Base.render_step_4(self, mgr, config)
-    def render_step_5(self, mgr, config):
-        from handlers.small_scale_recap import Handler as Base; Base.render_step_5(self, mgr, config)
