@@ -96,13 +96,24 @@ class ExcelManager:
             for c_idx, value in enumerate(row, 1):
                 ws.cell(row=r_idx, column=c_idx, value=value)
 
-    def write_vertical_array(self, sheet_name, start_cell, data_list):
+    def write_kv_pairs(self, sheet_name, data_dict, mapping_dict):
+        """
+        Writes values to specific cells based on a key-mapping.
+        :param sheet_name: Target worksheet name
+        :param data_dict: Parsed SQL data { 'Metric_A': 100, 'Metric_B': 200 }
+        :param mapping_dict: Mapping from JSON { 'Metric_A': 'B10', 'Metric_B': 'C10' }
+        """
         sheet = self.wb[sheet_name]
-        col = start_cell[0]
-        start_row = int(start_cell[1:])
-        for i, val in enumerate(data_list):
-            try:
-                val_to_write = float(val)
-            except ValueError:
-                val_to_write = val
-            sheet[f"{col}{start_row + i}"] = val_to_write
+        for key, value in data_dict.items():
+            if key in mapping_dict:
+                cell_address = mapping_dict[key]
+                try:
+                    # Try to convert to float for Excel calculations
+                    val_to_write = float(value)
+                except (ValueError, TypeError):
+                    val_to_write = value
+                
+                sheet[cell_address] = val_to_write
+            else:
+                # Optional: Log or print keys that aren't mapped
+                print(f"Warning: Key '{key}' not found in mapping for sheet {sheet_name}")
